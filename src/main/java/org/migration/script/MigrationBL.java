@@ -1,13 +1,19 @@
 package org.migration.script;
 
 import com.collabrr.db.connection.ex.ConnectionException;
+import com.collabrr.gcp.firestore.db.constant.LoggerConstants;
+import com.collabrr.storeentity.db.exception.PlatformEntityException;
+import com.collabrr.storeentity.db.exception.PlatformEntityNotFoundException;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
+import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
 import com.google.cloud.firestore.WriteResult;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.migration.db.client.GCPFirestoreDBConnectionManager;
 
 import java.util.HashMap;
@@ -17,13 +23,25 @@ import java.util.concurrent.ExecutionException;
 
 public class MigrationBL {
 
-    private static final String DATABASE_URL = "https://console.cloud.google.com/firestore/databases/-default-/data/panel/Accounts/A000000000?inv=1&invt=AbrB7g&project=gp-rnd-composer-dev";
+//    private static final Logger LOGGER = LogManager.getLogger(MigrationBL.class);
 
-    private static final String DATABASE_NAME = "gp-rnd-composer-dev";
+    private final String databaseUrl;
+
+    private final String projectName;
+
+    private final String databaseName;
+
+    private static final String PATH_DELIMITER = "/";
 
     private static final String collectionName = "DTR";
 
     private static final List<String> etpList = List.of("View", "EmailTemplate", "ExternalWebService", "UIModule", "WebServiceConnection", "WorkflowDefinition");
+
+    public MigrationBL(String databaseURL, String projectName, String databaseName) {
+        this.databaseUrl = databaseURL;
+        this.projectName = projectName;
+        this.databaseName = databaseName;
+    }
 
     public void migrateToNewDBStructure()
     {
@@ -32,7 +50,7 @@ public class MigrationBL {
         Firestore firestore = null;
         try {
 
-            gcpFirestoreDBConnectionManager = GCPFirestoreDBConnectionManager.getInstance(DATABASE_URL, DATABASE_NAME);
+            gcpFirestoreDBConnectionManager = GCPFirestoreDBConnectionManager.getInstance(databaseUrl,projectName, databaseName);
             firestore = gcpFirestoreDBConnectionManager.getDatabase();
 
             CollectionReference collectionRef = firestore.collection(collectionName);
@@ -67,6 +85,64 @@ public class MigrationBL {
                 gcpFirestoreDBConnectionManager.closeDBConnection();
             }
         }
+    }
+
+    public  <T> void  fetchAndPrint(String documentId, String collectionName, Class<T> returnType) throws PlatformEntityException {
+
+        logMessage("Fetching document with id: " + documentId);
+        GCPFirestoreDBConnectionManager gcpFirestoreDBConnectionManager;
+        Firestore firestore;
+        DocumentSnapshot documentSnapshot;
+        try {
+
+            gcpFirestoreDBConnectionManager = GCPFirestoreDBConnectionManager.getInstance(databaseUrl, projectName, databaseName);
+            firestore = gcpFirestoreDBConnectionManager.getDatabase();
+
+            logMessage("Connected to DB");
+
+            String documentPath = collectionName + PATH_DELIMITER + documentId;
+
+            logMessage("Fetching document from path: " + documentPath);
+            documentSnapshot = firestore.document(documentPath).get().get();
+
+            this.validateNull(documentSnapshot);
+
+        } catch (InterruptedException e) {
+            logMessage("Error thrown while fetching ..." + e);
+            e.printStackTrace();
+            Thread.currentThread().interrupt();
+            throw new PlatformEntityException(e);
+        } catch (ExecutionException e) {
+            logMessage("Error thrown while fetching ..." + e);
+            e.printStackTrace();
+            throw new PlatformEntityException(e);
+        } catch (ConnectionException | PlatformEntityNotFoundException e) {
+            logMessage("Error thrown while fetching ..." + e.getStackTrace());
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+
+        logMessage("Fetching Document ....");
+        T fetchedObj = documentSnapshot.toObject(returnType);
+
+        if(fetchedObj != null) {
+
+            System.out.println("Document ID: " + documentSnapshot.getId());
+            System.out.println("Field 'a': " + documentSnapshot.get("a"));
+            System.out.println("Field 'data': " + documentSnapshot.get("data"));
+
+            logMessage("Document fetched successfully");
+        }
+    }
+
+    private void validateNull(Object obj) throws PlatformEntityNotFoundException {
+        if (obj == null) {
+            throw new PlatformEntityNotFoundException(LoggerConstants.NO_DATA_EXISTS);
+        }
+    }
+
+    public static void logMessage(String message) {
+        System.out.println(message);
     }
 
 }

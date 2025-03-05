@@ -23,11 +23,12 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
+import static org.migration.script.MigrationBL.logMessage;
 
 public class GCPFirestoreDBConnectionManager {
 
 
-    private static final Logger LOGGER = LogManager.getLogger(com.collabrr.gcp.firestore.db.client.GCPFirestoreDBConnectionManager.class);
+//    private static final Logger LOGGER = LogManager.getLogger(com.collabrr.gcp.firestore.db.client.GCPFirestoreDBConnectionManager.class);
 
     private Firestore database;
 
@@ -45,19 +46,20 @@ public class GCPFirestoreDBConnectionManager {
      * @throws ConnectionException
      * @throws Exception
      */
-    private GCPFirestoreDBConnectionManager(String databaseURL, String databaseName)  throws IOException, ConnectionException{
-        LOGGER.info("*GCPFirestoreDBConnectionManager");
+    private GCPFirestoreDBConnectionManager(String databaseURL, String projectName, String databaseName)  throws IOException, ConnectionException{
+        logMessage("*GCPFirestoreDBConnectionManager");
         if (isNotBlank(databaseURL) && isNotBlank(databaseName)) {
 
             FirebaseOptions.Builder builder = FirebaseOptions.builder();
             FirebaseOptions options = builder
                     .setCredentials(GoogleCredentials.getApplicationDefault())
                     .setDatabaseUrl(databaseURL)
+                    .setProjectId(projectName)
                     .build();
 
             FirebaseApp fbApp =FirebaseApp.initializeApp(options,databaseName);
 
-            this.database = FirestoreClient.getFirestore(fbApp,databaseName);
+            this.database = FirestoreClient.getFirestore(fbApp, databaseName);
 
         } else {
             throw new ConnectionException("###Firebase Database Name is not configured. So not able to start the processor");
@@ -70,15 +72,15 @@ public class GCPFirestoreDBConnectionManager {
 
     private static GCPFirestoreDBConnectionManager connectionManager = null;
 
-    public static GCPFirestoreDBConnectionManager getInstance(String databaseURL, String databaseName) throws ConnectionException{
-        LOGGER.info("*getInstance");
+    public static GCPFirestoreDBConnectionManager getInstance(String databaseURL, String projectName, String databaseName) throws ConnectionException{
+        logMessage("*getInstance");
 
         if(connectionManager == null) {
             try {
-                connectionManager = new GCPFirestoreDBConnectionManager(databaseURL, databaseName);
+                connectionManager = new GCPFirestoreDBConnectionManager(databaseURL, projectName, databaseName);
             } catch(Exception e) {
-                LOGGER.error("###Error occured while creating HBase Configuration " + ExceptionUtils.getStackTrace(e));
-                throw new ConnectionException("###Error occured while creating HBase Configuration ", e);
+                logMessage("###Error occured while creating Firestore Configuration " + ExceptionUtils.getStackTrace(e));
+                throw new ConnectionException("###Error occured while creating Firestore Configuration ", e);
 
             }
         }
@@ -93,11 +95,11 @@ public class GCPFirestoreDBConnectionManager {
      *
      */
     public void closeDBConnection() {
-        LOGGER.info("*Shutting down Hbase Connection");
+        logMessage("*Shutting down Hbase Connection");
         try {
             this.database.close();
         } catch (Exception e) {
-            LOGGER.info("###Exception while closing the Hbase connection.");
+            logMessage("###Exception while closing the Hbase connection.");
         }
     }
 
