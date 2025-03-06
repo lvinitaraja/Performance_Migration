@@ -27,9 +27,6 @@ import static org.migration.script.MigrationBL.logMessage;
 
 public class GCPFirestoreDBConnectionManager {
 
-
-//    private static final Logger LOGGER = LogManager.getLogger(com.collabrr.gcp.firestore.db.client.GCPFirestoreDBConnectionManager.class);
-
     private Firestore database;
 
     /**
@@ -95,11 +92,11 @@ public class GCPFirestoreDBConnectionManager {
      *
      */
     public void closeDBConnection() {
-        logMessage("*Shutting down Hbase Connection");
+        logMessage("*Shutting down Firestore Connection");
         try {
             this.database.close();
         } catch (Exception e) {
-            logMessage("###Exception while closing the Hbase connection.");
+            logMessage("###Exception while closing the Firestore connection.");
         }
     }
 

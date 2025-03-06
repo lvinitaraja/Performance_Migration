@@ -21,14 +21,14 @@ public class Main {
 
         logMessage("Entering Main Method ..");
 
-        MigrationBL migrationBL = new MigrationBL(DATABASE_URL, PROJECT_NAME, DATABASE_NAME);
-
         String documentId = "FR_103r0fcr0n5hhnullcs22_A4b0aQ0R";
         String collectionName = "DTR";
         Class clazz = View.class;
         try {
-            migrationBL.fetchAndPrint(documentId, collectionName, clazz);
+            MigrationBL migrationBL = new MigrationBL(DATABASE_URL, PROJECT_NAME, DATABASE_NAME);
+            migrationBL.migrateToNewDBStructure(50);
         } catch (Exception e) {
+            e.printStackTrace();
             logMessage("Error thrown while fetching ..." + e.getStackTrace());
         }
 

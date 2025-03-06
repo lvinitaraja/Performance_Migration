@@ -12,8 +12,6 @@ import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
 import com.google.cloud.firestore.WriteResult;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.migration.db.client.GCPFirestoreDBConnectionManager;
 
 import java.util.HashMap;
@@ -27,6 +25,8 @@ public class MigrationBL {
 
     private final String databaseUrl;
 
+    private GCPFirestoreDBConnectionManager gcpFirestoreDBConnectionManager = null;
+
     private final String projectName;
 
     private final String databaseName;
@@ -37,61 +37,85 @@ public class MigrationBL {
 
     private static final List<String> etpList = List.of("View", "EmailTemplate", "ExternalWebService", "UIModule", "WebServiceConnection", "WorkflowDefinition");
 
-    public MigrationBL(String databaseURL, String projectName, String databaseName) {
+    public MigrationBL(String databaseURL, String projectName, String databaseName) throws ConnectionException {
         this.databaseUrl = databaseURL;
         this.projectName = projectName;
         this.databaseName = databaseName;
+        this.gcpFirestoreDBConnectionManager = GCPFirestoreDBConnectionManager.getInstance(databaseUrl, projectName, databaseName);
     }
 
-    public void migrateToNewDBStructure()
-    {
+    public void migrateToNewDBStructure(Integer batchSize) {
 
-        GCPFirestoreDBConnectionManager gcpFirestoreDBConnectionManager = null;
+        logMessage("Entering migrateToNewDBStructure Method ..");
+
         Firestore firestore = null;
         try {
-
-            gcpFirestoreDBConnectionManager = GCPFirestoreDBConnectionManager.getInstance(databaseUrl,projectName, databaseName);
+            logMessage("Establishing connection to Firestore DB ..");
+            gcpFirestoreDBConnectionManager = GCPFirestoreDBConnectionManager.getInstance(databaseUrl, projectName, databaseName);
             firestore = gcpFirestoreDBConnectionManager.getDatabase();
+
+            logMessage("Connected to DB");
 
             CollectionReference collectionRef = firestore.collection(collectionName);
 
             // Create a query to filter documents where data.etp is in etpList
             Query query = collectionRef.whereIn("data.etp", etpList);
 
-            QuerySnapshot querySnapshot = query.get().get();
-            List<QueryDocumentSnapshot> documents = querySnapshot.getDocuments();
+            QuerySnapshot querySnapshot;
+            QueryDocumentSnapshot lastDocument = null;
+            List<QueryDocumentSnapshot> documents;
 
-            for (QueryDocumentSnapshot document : documents) {
-                Map<String, Object> data = document.getData();
-                if (data.containsKey("data") && data.get("data") instanceof Map) {
-                    Map<String, Object> nestedData = (Map<String, Object>) data.get("data");
-
-                    Map<String, Object> updatedData = new HashMap<>(data);
-                    updatedData.remove("data"); // Remove the old nested data
-
-                    updatedData.putAll(nestedData);
-
-                    // Update the document with the flattened data
-                    ApiFuture<WriteResult> writeResult = document.getReference().set(updatedData);
-                    System.out.println("Updated document: " + document.getId() + " at: " + writeResult.get().getUpdateTime());
+            do {
+                // If there's a last document, use startAfter to get the next batch
+                if (lastDocument != null) {
+                    query = query.startAfter(lastDocument);
                 }
-            }
+
+                // Limit the query to the batch size
+                query = query.limit(batchSize);
+
+                // Execute the query to get the next batch
+                querySnapshot = query.get().get();
+                documents = querySnapshot.getDocuments();
+
+                // Process each document in the batch
+                for (QueryDocumentSnapshot document : documents) {
+                    Map<String, Object> data = document.getData();
+                    if (data.containsKey("data") && data.get("data") instanceof Map) {
+                        Map<String, Object> nestedData = (Map<String, Object>) data.get("data");
+
+                        Map<String, Object> updatedData = new HashMap<>(data);
+                        updatedData.remove("data"); // Remove the old nested data
+
+                        updatedData.putAll(nestedData); // Merge the nested data
+
+                        // Update the document with the flattened data
+                        ApiFuture<WriteResult> writeResult = document.getReference().set(updatedData);
+                        logMessage("Updated document: " + document.getId() + " at: " + writeResult.get().getUpdateTime());
+                    }
+                }
+
+                // Get the last document in the batch
+                if (!documents.isEmpty()) {
+                    lastDocument = documents.get(documents.size() - 1);
+                }
+
+            } while (documents.size() == batchSize); // Continue if the batch is full, indicating there might be more documents
 
         } catch (ConnectionException | ExecutionException | InterruptedException e) {
+            e.printStackTrace();
             throw new RuntimeException(e);
         } finally {
-            if(firestore != null)
-            {
+            if (gcpFirestoreDBConnectionManager.getDatabase() != null) {
                 gcpFirestoreDBConnectionManager.closeDBConnection();
             }
         }
     }
 
-    public  <T> void  fetchAndPrint(String documentId, String collectionName, Class<T> returnType) throws PlatformEntityException {
+    private <T> DocumentSnapshot fetchObject(String documentId, String collectionName, Class<T> returnType) throws PlatformEntityException {
 
         logMessage("Fetching document with id: " + documentId);
-        GCPFirestoreDBConnectionManager gcpFirestoreDBConnectionManager;
-        Firestore firestore;
+        Firestore firestore = null;
         DocumentSnapshot documentSnapshot;
         try {
 
@@ -121,17 +145,25 @@ public class MigrationBL {
             e.printStackTrace();
             throw new RuntimeException(e);
         }
-
         logMessage("Fetching Document ....");
-        T fetchedObj = documentSnapshot.toObject(returnType);
+        return documentSnapshot;
+    }
 
-        if(fetchedObj != null) {
+    public <T> void fetchAndPrint(String documentId, String collectionName, Class<T> returnType) throws PlatformEntityException {
+        logMessage("Fetching Document ....");
+        DocumentSnapshot documentSnapshot = fetchObject(documentId, collectionName, returnType);
+
+        if (documentSnapshot != null) {
 
             System.out.println("Document ID: " + documentSnapshot.getId());
             System.out.println("Field 'a': " + documentSnapshot.get("a"));
             System.out.println("Field 'data': " + documentSnapshot.get("data"));
 
             logMessage("Document fetched successfully");
+        }
+
+        if (gcpFirestoreDBConnectionManager.getDatabase() != null) {
+            gcpFirestoreDBConnectionManager.closeDBConnection();
         }
     }
 
@@ -143,6 +175,33 @@ public class MigrationBL {
 
     public static void logMessage(String message) {
         System.out.println(message);
+    }
+
+    public <T> void migrateOneRecord(String documentId, String collectionName, Class<T> returnType) {
+        try {
+            DocumentSnapshot documentSnapshot = fetchObject(documentId, collectionName, returnType);
+            Map<String, Object> data = documentSnapshot.getData();
+            if (data.containsKey("data") && data.get("data") instanceof Map) {
+                Map<String, Object> nestedData = (Map<String, Object>) data.get("data");
+
+                Map<String, Object> updatedData = new HashMap<>(data);
+                updatedData.remove("data"); // Remove the old nested data
+
+                updatedData.putAll(nestedData);
+
+                // Update the document with the flattened data
+                ApiFuture<WriteResult> writeResult = documentSnapshot.getReference().set(updatedData);
+                System.out.println("Updated document: " + documentSnapshot.getId() + " at: " + writeResult.get().getUpdateTime());
+            }
+        } catch (ExecutionException | InterruptedException | PlatformEntityException ex) {
+            logMessage("Error thrown while migrating ..." + ex);
+            ex.printStackTrace();
+            throw new RuntimeException(ex);
+        } finally {
+            if (gcpFirestoreDBConnectionManager.getDatabase() != null) {
+                gcpFirestoreDBConnectionManager.closeDBConnection();
+            }
+        }
     }
 
 }
