@@ -21,8 +21,6 @@ import java.util.concurrent.ExecutionException;
 
 public class MigrationBL {
 
-//    private static final Logger LOGGER = LogManager.getLogger(MigrationBL.class);
-
     private final String databaseUrl;
 
     private GCPFirestoreDBConnectionManager gcpFirestoreDBConnectionManager = null;
@@ -33,10 +31,6 @@ public class MigrationBL {
 
     private static final String PATH_DELIMITER = "/";
 
-    private static final String collectionName = "DTR";
-
-    private static final List<String> etpList = List.of("View", "EmailTemplate", "ExternalWebService", "UIModule", "WebServiceConnection", "WorkflowDefinition");
-
     public MigrationBL(String databaseURL, String projectName, String databaseName) throws ConnectionException {
         this.databaseUrl = databaseURL;
         this.projectName = projectName;
@@ -44,7 +38,7 @@ public class MigrationBL {
         this.gcpFirestoreDBConnectionManager = GCPFirestoreDBConnectionManager.getInstance(databaseUrl, projectName, databaseName);
     }
 
-    public void migrateToNewDBStructure(Integer batchSize) {
+    public void migrateToNewDBStructure(String collectionName, String entityName, Integer batchSize) {
 
         logMessage("Entering migrateToNewDBStructure Method ..");
 
@@ -59,11 +53,13 @@ public class MigrationBL {
             CollectionReference collectionRef = firestore.collection(collectionName);
 
             // Create a query to filter documents where data.etp is in etpList
-            Query query = collectionRef.whereIn("data.etp", etpList);
+            Query query = collectionRef.whereEqualTo("data.etp", entityName);
 
             QuerySnapshot querySnapshot;
             QueryDocumentSnapshot lastDocument = null;
             List<QueryDocumentSnapshot> documents;
+
+            int totalMigrated = 0; // Track total migrated documents
 
             do {
                 // If there's a last document, use startAfter to get the next batch
@@ -78,8 +74,11 @@ public class MigrationBL {
                 querySnapshot = query.get().get();
                 documents = querySnapshot.getDocuments();
 
+                int batchMigrated = 0; // Track migrated documents in the current batch
+
                 // Process each document in the batch
                 for (QueryDocumentSnapshot document : documents) {
+                    logMessage("Processing document: " + document.getId());
                     Map<String, Object> data = document.getData();
                     if (data.containsKey("data") && data.get("data") instanceof Map) {
                         Map<String, Object> nestedData = (Map<String, Object>) data.get("data");
@@ -92,8 +91,12 @@ public class MigrationBL {
                         // Update the document with the flattened data
                         ApiFuture<WriteResult> writeResult = document.getReference().set(updatedData);
                         logMessage("Updated document: " + document.getId() + " at: " + writeResult.get().getUpdateTime());
+                        batchMigrated++;
+                        totalMigrated++;
                     }
                 }
+
+                logMessage("Migrated " + batchMigrated + " documents in this batch.");
 
                 // Get the last document in the batch
                 if (!documents.isEmpty()) {
@@ -101,6 +104,8 @@ public class MigrationBL {
                 }
 
             } while (documents.size() == batchSize); // Continue if the batch is full, indicating there might be more documents
+
+            logMessage("Total migrated documents: " + totalMigrated);
 
         } catch (ConnectionException | ExecutionException | InterruptedException e) {
             e.printStackTrace();
@@ -112,7 +117,7 @@ public class MigrationBL {
         }
     }
 
-    private <T> DocumentSnapshot fetchObject(String documentId, String collectionName, Class<T> returnType) throws PlatformEntityException {
+    private <T> DocumentSnapshot fetchObject(String documentId, String collectionName) throws PlatformEntityException {
 
         logMessage("Fetching document with id: " + documentId);
         Firestore firestore = null;
@@ -149,9 +154,9 @@ public class MigrationBL {
         return documentSnapshot;
     }
 
-    public <T> void fetchAndPrint(String documentId, String collectionName, Class<T> returnType) throws PlatformEntityException {
+    public <T> void fetchAndPrint(String documentId, String collectionName) throws PlatformEntityException {
         logMessage("Fetching Document ....");
-        DocumentSnapshot documentSnapshot = fetchObject(documentId, collectionName, returnType);
+        DocumentSnapshot documentSnapshot = fetchObject(documentId, collectionName);
 
         if (documentSnapshot != null) {
 
@@ -177,9 +182,9 @@ public class MigrationBL {
         System.out.println(message);
     }
 
-    public <T> void migrateOneRecord(String documentId, String collectionName, Class<T> returnType) {
+    public <T> void migrateOneRecord(String documentId, String collectionName) {
         try {
-            DocumentSnapshot documentSnapshot = fetchObject(documentId, collectionName, returnType);
+            DocumentSnapshot documentSnapshot = fetchObject(documentId, collectionName);
             Map<String, Object> data = documentSnapshot.getData();
             if (data.containsKey("data") && data.get("data") instanceof Map) {
                 Map<String, Object> nestedData = (Map<String, Object>) data.get("data");
