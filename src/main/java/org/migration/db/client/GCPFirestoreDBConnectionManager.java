@@ -1,6 +1,5 @@
 package org.migration.db.client;
 
-import com.collabrr.db.connection.ex.ConnectionException;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.cloud.firestore.Firestore;
 import com.google.firebase.FirebaseApp;
@@ -30,7 +29,7 @@ public class GCPFirestoreDBConnectionManager {
      * @throws ConnectionException
      * @throws Exception
      */
-    private GCPFirestoreDBConnectionManager(String databaseURL, String projectName, String databaseName) throws IOException, ConnectionException {
+    private GCPFirestoreDBConnectionManager(String databaseURL, String projectName, String databaseName) throws Exception {
         logMessage("*GCPFirestoreDBConnectionManager");
         if (isNotBlank(databaseURL) && isNotBlank(databaseName)) {
 
@@ -46,17 +45,17 @@ public class GCPFirestoreDBConnectionManager {
             this.database = FirestoreClient.getFirestore(fbApp, databaseName);
 
         } else {
-            throw new ConnectionException("###Firebase Database Name is not configured. So not able to start the processor");
+            throw new Exception("###Firebase Database Name is not configured. So not able to start the processor");
         }
 
         if (this.database == null) {
-            throw new ConnectionException("###Firebase Database connection is not established. Please check the store connection configuration and check database is running or not.");
+            throw new Exception("###Firebase Database connection is not established. Please check the store connection configuration and check database is running or not.");
         }
     }
 
     private static GCPFirestoreDBConnectionManager connectionManager = null;
 
-    public static GCPFirestoreDBConnectionManager getInstance(String databaseURL, String projectName, String databaseName) throws ConnectionException {
+    public static GCPFirestoreDBConnectionManager getInstance(String databaseURL, String projectName, String databaseName) throws Exception {
         logMessage("*getInstance");
 
         if (connectionManager == null) {
@@ -64,7 +63,7 @@ public class GCPFirestoreDBConnectionManager {
                 connectionManager = new GCPFirestoreDBConnectionManager(databaseURL, projectName, databaseName);
             } catch (Exception e) {
                 logMessage("###Error occured while creating Firestore Configuration " + ExceptionUtils.getStackTrace(e));
-                throw new ConnectionException("###Error occured while creating Firestore Configuration ", e);
+                throw new Exception("###Error occured while creating Firestore Configuration ", e);
 
             }
         }
