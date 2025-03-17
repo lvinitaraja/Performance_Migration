@@ -23,9 +23,9 @@ public class Main {
 
     private static String DATABASE_NAME;
 
-    private static final String CONFIG_FILE_PATH = "../config.properties";
+    private static final String CONFIG_FILE_PATH = "config.properties";
 
-    private static final String JSON_FILE_PATH = "../data.json";
+    private static final String JSON_FILE_PATH = "data.json";
 
     public static void main(String[] args) throws IOException {
 
@@ -40,7 +40,7 @@ public class Main {
         try {
             loadProperties();
             MigrationBL migrationBL = new MigrationBL(DATABASE_URL, PROJECT_NAME, DATABASE_NAME);
-            String documentId = "FR_103r0fcr0n5hhnullcs22_A7w1yb02";
+            String documentId = "UIM_1cdv0nm4tjcocnullA0127_AmZJb7MK";
             migrationBL.migrateOneRecord(documentId, collectionName);
             // migrationBL.migrateToNewDBStructure(collectionName, entityList, 50);
 //               migrationBL.migrateToNewDBStructure(collectionName, entityList, BATCH_SIZE);
