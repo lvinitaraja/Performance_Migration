@@ -10,6 +10,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
+import java.util.logging.LogManager;
 
 import static org.migration.script.MigrationBL.logMessage;
 
@@ -28,6 +29,9 @@ public class Main {
     private static final String JSON_FILE_PATH = "data.json";
 
     public static void main(String[] args) throws IOException {
+
+        // Load logging configuration
+        LogManager.getLogManager().readConfiguration(Main.class.getResourceAsStream("/logging.properties"));
 
         logMessage("Entering Main Method ..");
 

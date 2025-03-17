@@ -8,14 +8,18 @@ import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
 import com.google.cloud.firestore.WriteResult;
+import org.migration.Main;
 import org.migration.db.client.GCPFirestoreDBConnectionManager;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Logger;
 
 public class MigrationBL {
+
+    private static final Logger logger = Logger.getLogger(MigrationBL.class.getName());
 
     private final String databaseUrl;
 
@@ -175,7 +179,7 @@ public class MigrationBL {
     }
 
     public static void logMessage(String message) {
-        System.out.println(message);
+        logger.info(message);
     }
 
     public <T> void migrateOneRecord(String documentId, String collectionName) {
@@ -192,7 +196,7 @@ public class MigrationBL {
 
                 // Update the document with the flattened data
                 ApiFuture<WriteResult> writeResult = documentSnapshot.getReference().set(updatedData);
-                System.out.println("Updated document: " + documentSnapshot.getId() + " at: " + writeResult.get().getUpdateTime());
+                logMessage("Updated document: " + documentSnapshot.getId() + " at: " + writeResult.get().getUpdateTime());
             }
         } catch (Exception ex) {
             logMessage("Error thrown while migrating ..." + ex);
